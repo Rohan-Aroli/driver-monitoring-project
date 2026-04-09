@@ -3,7 +3,7 @@ __pycache__/
 
 # Virtual environments
 .venv/
-carla_codes/carla_env/
+
 
 # Temp file
 tempCodeRunnerFile.py
