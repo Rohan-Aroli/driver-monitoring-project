@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+
+# Virtual environments
+.venv/
+
+
+# Temp file
+tempCodeRunnerFile.py
+
+#json in shared folder
+shared/driver_state.json
