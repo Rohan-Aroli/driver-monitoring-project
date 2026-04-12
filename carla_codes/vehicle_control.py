@@ -45,7 +45,7 @@ def run_control_loop(world,vehicle):
             else:
                 
                 if prev_state != "UNRESPONSIVE":
-                    time.sleep(1)
+                    
                     print("Driver missing → Emergency mode")
 
                     vehicle.set_autopilot(False)
