@@ -1,6 +1,6 @@
 import carla
 from carla_codes.vehicle_functions import set_hazard_lights, honk
-
+import time
 
 def gradual_stop(vehicle):
     vehicle.set_autopilot(False)

@@ -43,7 +43,9 @@ def run_control_loop(world,vehicle):
                 prev_state = "NORMAL"
 
             else:
+                
                 if prev_state != "UNRESPONSIVE":
+                    time.sleep(1)
                     print("Driver missing → Emergency mode")
 
                     vehicle.set_autopilot(False)
@@ -51,20 +53,21 @@ def run_control_loop(world,vehicle):
 
                     for _ in range(3):
                         honk()
-                    emergency_active = True
+                    control = carla.VehicleControl()
+                    control.steer = 0.0
+                    control.throttle = 0.0
+                    control.brake = 0.5  
 
-                    # gradual_stop(vehicle)
+                    vehicle.apply_control(control)
+                    # emergency_active = True
                     prev_state = "UNRESPONSIVE"
+                    
             if cam.latest_frame is not None:
                 cv2.imshow("CARLA Camera", cam.latest_frame)
                 cv2.waitKey(1)
 
-            if emergency_active:
-                control = carla.VehicleControl()
-                control.throttle = 0.0
-                control.brake = 0.4   
-
-                vehicle.apply_control(control)
+            # if emergency_active:
+                
 
 
             time.sleep(0.05)

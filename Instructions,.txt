@@ -1,0 +1,4 @@
+Alright we are getting started, 
+
+1) replace the reqirements_main.txt ka carla to your specific whl file path
+2) replace carla_codes\main.py line number 23 ka subprocess ka path to your carlaue4.exe

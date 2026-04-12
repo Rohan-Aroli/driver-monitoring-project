@@ -25,9 +25,8 @@ def start_carla_if_needed():
     "-windowed",
     "-ResX=640",
     "-ResY=480",
-    # "-dx11",
     "-quality-level=Low",
-    "-fps=15"
+    "-fps=45"
     ])
 
     print("⏳ Waiting for CARLA to be ready...")

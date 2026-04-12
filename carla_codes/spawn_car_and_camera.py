@@ -41,7 +41,7 @@ def start_camera_stream(camera):
 
     def process_image(image):
         global latest_frame
-        print("Frame received") 
+        # print("Frame received") 
         array = np.frombuffer(image.raw_data, dtype=np.uint8)
         array = np.reshape(array, (image.height, image.width, 4))
         frame = array[:, :, :3]

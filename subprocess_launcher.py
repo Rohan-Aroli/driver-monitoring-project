@@ -2,7 +2,10 @@ import subprocess
 import signal
 import sys
 import time
+from System_paths_config import face_python, face_main 
 face_process = None
+
+
 
 
 def start_face_detection():
@@ -15,8 +18,8 @@ def start_face_detection():
     try:
         face_process = subprocess.Popen(
             [
-                r"face_detection_codes\facedetection\Scripts\python.exe",
-                r"face_detection_codes\main.py"
+                face_python,
+                face_main
             ],
             creationflags=subprocess.CREATE_NEW_CONSOLE
         )
