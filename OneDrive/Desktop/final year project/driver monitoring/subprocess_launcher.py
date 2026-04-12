@@ -1,7 +1,7 @@
 import subprocess
 import signal
 import sys
-
+import time
 face_process = None
 
 
@@ -10,15 +10,31 @@ def start_face_detection():
 
     print("👉 Launching face detection subprocess...")
 
-    face_process = subprocess.Popen([
-        r"face_detection_codes\facedetection\Scripts\python.exe",
-        r"face_detection_codes\main.py"
-       
-    ],
-    creationflags=subprocess.CREATE_NEW_CONSOLE
-    )
+    
 
-    print("🧠 Face detection subprocess started")
+    try:
+        face_process = subprocess.Popen(
+            [
+                r"face_detection_codes\facedetection\Scripts\python.exe",
+                r"face_detection_codes\main.py"
+            ],
+            creationflags=subprocess.CREATE_NEW_CONSOLE
+        )
+
+        # Give it a moment to fail if it's going to
+        time.sleep(4)
+
+        if face_process.poll() is not None:
+            raise RuntimeError("Face detection subprocess crashed immediately")
+
+        print("🧠 Face detection subprocess started")
+
+    except Exception as e:
+        print(f"❌ Failed to start face detection: {e}")
+        face_process = None
+        raise
+
+
 
 
 def stop_face_detection():

@@ -3,6 +3,8 @@ from carla_codes.vehicle_control import read_state, run_control_loop
 import subprocess
 import time
 import socket
+import os
+
 
 def is_carla_running(host="localhost", port=2000):
     try:
@@ -12,44 +14,78 @@ def is_carla_running(host="localhost", port=2000):
         return False
 
 def start_carla_if_needed():
+    
+    os.system("taskkill /F /IM CarlaUE4.exe")
+    time.sleep(3)
     if not is_carla_running():
         print("🚀 Starting CARLA simulator...")
 
-        subprocess.Popen([
+    subprocess.Popen([
     r"C:\Users\aroli\OneDrive\Desktop\final year project\utilities\carla\CarlaUE4.exe",
     "-windowed",
-    "-ResX=800",
-    "-ResY=600",
-    "-dx11",
-    "-quality-level=Low"
-])
+    "-ResX=640",
+    "-ResY=480",
+    # "-dx11",
+    "-quality-level=Low",
+    "-fps=15"
+    ])
 
-        print("⏳ Waiting for CARLA to be ready...")
+    print("⏳ Waiting for CARLA to be ready...")
+    time.sleep(10)
 
-        # 🔥 wait loop instead of sleep
-        print("⏳ Waiting 45 seconds for CARLA to fully load...")
-        time.sleep(45)
+    max_wait = 60
+    check_interval = 1
+    elapsed = 0
+
+    while elapsed < max_wait:
+        if is_carla_running():
+            print(f"✅ CARLA ready after {elapsed} seconds")
+            time.sleep(2)
+            return
+        
+        print(f"   [{elapsed}s] Waiting for CARLA server...")
+        time.sleep(check_interval)
+        elapsed += check_interval
+
+    raise TimeoutError("CARLA did not respond...")
 
 
-    else:
-        print("✅ CARLA already running")
 
 
 def run_carla():
 
     start_carla_if_needed()
 
-    vehicle, camera = setup_carla()
+    world,vehicle, camera = setup_carla()
 
     start_camera_stream(camera)
 
     print("System running...")
 
     try:
-        run_control_loop(vehicle)
+        run_control_loop(world,vehicle)
 
     except KeyboardInterrupt:
         print("Stopping system...")
+    
+    finally:
+
+        print("🧹 Cleaning up actors...")
+
+        try:
+            if camera.is_listening:
+                camera.stop()
+            camera.destroy()
+        except:
+            pass
+
+        try:
+            vehicle.destroy()
+        except:
+            pass
+
+        import cv2
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":

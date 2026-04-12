@@ -3,23 +3,25 @@ import cv2
 from face_detection import FaceDetector
 from logger import write_state_periodically
 
+global prev_x 
+global prev_area 
+
+POSITION_THRESHOLD = 80
+AREA_THRESHOLD = 5000
+
+cap = cv2.VideoCapture(0)
+detector = FaceDetector()
+
+
+
+eye_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_eye.xml'
+)
 
 def run_face_detection():
-
     prev_x = None
     prev_area = None
-
-    POSITION_THRESHOLD = 80
-    AREA_THRESHOLD = 5000
-
-    cap = cv2.VideoCapture(0)
-    detector = FaceDetector()
-
-
-
-    eye_cascade = cv2.CascadeClassifier(
-        cv2.data.haarcascades + 'haarcascade_eye.xml'
-    )
+    print("🔥 FACE DETECTION SCRIPT STARTED")
 
 
     while True:
@@ -41,7 +43,7 @@ def run_face_detection():
 
             # 1. Eye check
             gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY) 
-            face_region_gray = gray[y:y+h, x:x+w]
+            face_region_gray = gray
 
             eyes = eye_cascade.detectMultiScale(face_region_gray)
 
@@ -84,6 +86,7 @@ def run_face_detection():
             break
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     run_face_detection()

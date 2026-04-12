@@ -2,6 +2,7 @@ import carla
 import numpy as np
 import cv2
 
+latest_frame = None
 
 def setup_carla():
 
@@ -10,6 +11,11 @@ def setup_carla():
 
     world = client.get_world()
     blueprint_library = world.get_blueprint_library()
+
+    settings = world.get_settings()
+    # settings.synchronous_mode = True
+    # settings.fixed_delta_seconds = 0.05
+    # world.apply_settings(settings)
 
     # Spawn vehicle
     vehicle_bp = blueprint_library.filter('vehicle.*')[0]
@@ -29,16 +35,17 @@ def setup_carla():
 
     camera = world.spawn_actor(camera_bp, camera_transform, attach_to=vehicle)
 
-    return vehicle, camera
+    return world,vehicle,camera
 
 def start_camera_stream(camera):
 
     def process_image(image):
+        global latest_frame
+        print("Frame received") 
         array = np.frombuffer(image.raw_data, dtype=np.uint8)
         array = np.reshape(array, (image.height, image.width, 4))
         frame = array[:, :, :3]
 
-        cv2.imshow("CARLA Camera", frame)
-        cv2.waitKey(1)
+        latest_frame = frame   
 
     camera.listen(process_image)

@@ -17,4 +17,5 @@ def gradual_stop(vehicle):
 
         velocity = vehicle.get_velocity()
         speed = (velocity.x**2 + velocity.y**2 + velocity.z**2) ** 0.5
+        time.sleep(0.05)
     
