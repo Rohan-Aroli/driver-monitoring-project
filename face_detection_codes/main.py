@@ -2,15 +2,20 @@ import cv2
 
 from face_detection import FaceDetector
 from logger import write_state_periodically
+from eye_landmark_extractor import EyeLandmarkExtractor ###
 
 global prev_x 
 global prev_area 
+global face_region
+
+
 
 POSITION_THRESHOLD = 80
 AREA_THRESHOLD = 5000
 
 cap = cv2.VideoCapture(0)
 detector = FaceDetector()
+extractor = EyeLandmarkExtractor()  ###
 
 
 
@@ -19,8 +24,11 @@ eye_cascade = cv2.CascadeClassifier(
 )
 
 def run_face_detection():
-    prev_x = None
-    prev_area = None
+
+    # prev_x = None
+    # prev_area = None
+    face_region=None
+
     print("🔥 FACE DETECTION SCRIPT STARTED")
 
 
@@ -35,49 +43,40 @@ def run_face_detection():
 
         if face_detected:
             x, y, w, h = data["face_bbox"]
-
+            bbox_values=(x,y,w,h)
             face_region = frame[y:y+h, x:x+w]
-
-            # ---- VALIDATION START ----
-            valid = True
-
-            # 1. Eye check
-            gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY) 
-            face_region_gray = gray
-
-            eyes = eye_cascade.detectMultiScale(face_region_gray)
-
-            # 2. Position consistency
-            if valid and prev_x is not None:
-                if abs(x - prev_x) > POSITION_THRESHOLD:
-                    valid = False
-
-            # 3. Size consistency
-            area = w * h
-            if valid and prev_area is not None:
-                if abs(area - prev_area) > AREA_THRESHOLD:
-                    valid = False
-
-            # Update history ONLY if valid
-            if valid:
-                prev_x = x
-                prev_area = area
-
-            final_face = valid
-
+            landmarks = extractor.extract(face_region,bbox_values)
         else:
-            final_face = False
+            pass#to be completed
+
+        
+        write_state_periodically(landmarks=landmarks)
+
+            
+        # else:
+        #     pass 
+        #to be called inside ridas folder
+            
+             
 
         # 🔥 WRITE ONLY VALIDATED RESULT
-        write_state_periodically(final_face)
+        # write_state_periodically(face_detected)
 
         # ---- DRAWING ----
-        if final_face:
+        if face_detected:
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
             cv2.putText(frame, "VALID FACE", (x, y-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
+            for (lx, ly) in landmarks["left_eye"]:
+                cv2.circle(frame, (lx, ly), 3, (0,0,255), -1)
+
+            for (rx, ry) in landmarks["right_eye"]:
+                cv2.circle(frame, (rx, ry), 3, (255,0,0), -1)
+
         else:
             cv2.putText(frame, "NO VALID FACE", (30, 50),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
+            cv2.putText(frame, "NO LANDMARKS EXTRACTED", (30, 80),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2)
 
         cv2.imshow("Face Detection", frame)
