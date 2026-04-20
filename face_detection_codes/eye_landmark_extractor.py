@@ -2,17 +2,8 @@ import cv2
 import mediapipe as mp
 from logger import write_state_periodically
 
-LEFT_EYE = [
-33, 160, 158, 133, 153, 144,
-163, 7, 246, 161, 159, 157,
-173, 155, 154, 145
-]
-
-RIGHT_EYE = [
-362, 385, 387, 263, 373, 380,
-390, 249, 466, 388, 386, 384,
-398, 382, 381, 374
-]
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
 
 class EyeLandmarkExtractor:
 
