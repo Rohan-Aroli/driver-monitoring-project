@@ -14,6 +14,7 @@ detector = FaceDetector()
 
 
 
+
 eye_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + 'haarcascade_eye.xml'
 )
@@ -22,7 +23,7 @@ def run_face_detection():
     prev_x = None
     prev_area = None
     print("🔥 FACE DETECTION SCRIPT STARTED")
-
+    
 
     while True:
         ret, frame = cap.read()
@@ -38,41 +39,42 @@ def run_face_detection():
 
             face_region = frame[y:y+h, x:x+w]
 
-            # ---- VALIDATION START ----
-            valid = True
+            # # ---- VALIDATION START ----
+            # valid = True
 
-            # 1. Eye check
-            gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY) 
-            face_region_gray = gray
+            # # 1. Eye check
+            # gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY) 
+            # face_region_gray = gray
 
-            eyes = eye_cascade.detectMultiScale(face_region_gray)
+            # eyes = eye_cascade.detectMultiScale(face_region_gray)
 
-            # 2. Position consistency
-            if valid and prev_x is not None:
-                if abs(x - prev_x) > POSITION_THRESHOLD:
-                    valid = False
+            # # 2. Position consistency
+            # if valid and prev_x is not None:
+            #     if abs(x - prev_x) > POSITION_THRESHOLD:
+            #         valid = False
 
-            # 3. Size consistency
-            area = w * h
-            if valid and prev_area is not None:
-                if abs(area - prev_area) > AREA_THRESHOLD:
-                    valid = False
+            # # 3. Size consistency
+            # area = w * h
+            # if valid and prev_area is not None:
+            #     if abs(area - prev_area) > AREA_THRESHOLD:
+            #         valid = False
 
-            # Update history ONLY if valid
-            if valid:
-                prev_x = x
-                prev_area = area
+            # # Update history ONLY if valid
+            # if valid:
+            #     prev_x = x
+            #     prev_area = area
 
-            final_face = valid
+            # final_face = valid
 
         else:
-            final_face = False
+            pass
+            # final_face = False
 
         # 🔥 WRITE ONLY VALIDATED RESULT
-        write_state_periodically(final_face)
+        write_state_periodically(face_detected=face_detected)
 
         # ---- DRAWING ----
-        if final_face:
+        if face_detected:
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
             cv2.putText(frame, "VALID FACE", (x, y-10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,255,0), 2)
