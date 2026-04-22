@@ -1,0 +1,30 @@
+[
+    {
+        "session_id": "session_1776764472",
+        "timestamp": "2026-04-21T15:11:12.074947",
+        "state": "normal",
+        "avg_ear": 0.3001,
+        "min_ear": 0.2211,
+        "max_ear": 0.3871,
+        "avg_perclos": 0.003,
+        "max_perclos": 0.0072,
+        "avg_score": 0.0015,
+        "max_score": 0.0036,
+        "samples": 335,
+        "duration_sec": 15
+    },
+    {
+        "session_id": "session_1776764841",
+        "timestamp": "2026-04-21T15:17:21.082656",
+        "state": "drowsy",
+        "avg_ear": 0.2206,
+        "min_ear": 0.1899,
+        "max_ear": 0.2783,
+        "avg_perclos": 0.831,
+        "max_perclos": 1.0,
+        "avg_score": 0.6341,
+        "max_score": 0.79,
+        "samples": 101,
+        "duration_sec": 5
+    }
+]
