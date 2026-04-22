@@ -3,10 +3,12 @@ import time
 from pathlib import Path
 import carla
 import cv2
-
 from carla_codes.vehicle_functions import set_hazard_lights, honk
 from carla_codes.custom_vehicle_physics import gradual_stop
 import carla_codes.spawn_car_and_camera as cam
+from carla_codes.Driver_unresponsive_controls import EmergencyPullOver
+
+
 
 global emergency_active
 
@@ -24,6 +26,7 @@ def read_state():
 
 
 def run_control_loop(world,vehicle):
+    emergency_system = EmergencyPullOver(world, vehicle)
     emergency_active= False
     try:
         prev_state = None
@@ -45,22 +48,11 @@ def run_control_loop(world,vehicle):
             else:
                 
                 if prev_state != "UNRESPONSIVE":
-                    
-                    print("Driver missing → Emergency mode")
-
                     vehicle.set_autopilot(False)
                     set_hazard_lights(vehicle, True)
-
-                    for _ in range(3):
-                        honk()
-                    control = carla.VehicleControl()
-                    control.steer = 0.0
-                    control.throttle = 0.0
-                    control.brake = 0.5  
-
-                    vehicle.apply_control(control)
-                    # emergency_active = True
+                    emergency_system.start()
                     prev_state = "UNRESPONSIVE"
+                emergency_system.run_step()
                     
             if cam.latest_frame is not None:
                 cv2.imshow("CARLA Camera", cam.latest_frame)
