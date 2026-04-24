@@ -1,0 +1,44 @@
+[
+    {
+        "session_id": "session_1776781714",
+        "timestamp": "2026-04-21T19:58:34.264848",
+        "state": "normal",
+        "avg_ear": 0.248,
+        "min_ear": 0.1888,
+        "max_ear": 0.2824,
+        "avg_perclos": 0.1749,
+        "max_perclos": 0.42,
+        "avg_score": 0.199,
+        "max_score": 0.4043,
+        "samples": 424,
+        "duration_sec": 15
+    },
+    {
+        "session_id": "session_1776781746",
+        "timestamp": "2026-04-21T19:59:06.009215",
+        "state": "drowsy",
+        "avg_ear": 0.2016,
+        "min_ear": 0.1715,
+        "max_ear": 0.2344,
+        "avg_perclos": 0.9659,
+        "max_perclos": 1.0,
+        "avg_score": 0.7529,
+        "max_score": 0.81,
+        "samples": 426,
+        "duration_sec": 15
+    },
+    {
+        "session_id": "session_1776781771",
+        "timestamp": "2026-04-21T19:59:31.702931",
+        "state": "unresponsive",
+        "avg_ear": 0.1986,
+        "min_ear": 0.1528,
+        "max_ear": 0.2239,
+        "avg_perclos": 1.0,
+        "max_perclos": 1.0,
+        "avg_score": 0.5,
+        "max_score": 0.5,
+        "samples": 426,
+        "duration_sec": 15
+    }
+]
