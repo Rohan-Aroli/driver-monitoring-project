@@ -3,8 +3,6 @@ import mediapipe as mp
 
 import sys
 
-
-
 class FaceDetector:
     def __init__(self):
         self.mp_face = mp.solutions.face_detection

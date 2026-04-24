@@ -15,38 +15,39 @@ def is_carla_running(host="localhost", port=2000):
 
 def start_carla_if_needed():
     
-    os.system("taskkill /F /IM CarlaUE4.exe")
-    time.sleep(3)
+    # os.system("taskkill /F /IM CarlaUE4.exe")
+    # time.sleep(3)
     if not is_carla_running():
         print("🚀 Starting CARLA simulator...")
 
-    subprocess.Popen([
-    r"C:\Users\aroli\OneDrive\Desktop\final year project\utilities\carla\CarlaUE4.exe",
-    "-windowed",
-    "-ResX=640",
-    "-ResY=480",
-    "-quality-level=Low",
-    "-fps=45"
-    ])
+        subprocess.Popen([
+        r"C:\Users\aroli\OneDrive\Desktop\final year project\utilities\carla\CarlaUE4.exe",
+        "-windowed",
+        "-ResX=640",
+        "-ResY=480",
+        "-quality-level=Low",
+        "-fps=45"
+        ])
 
-    print("⏳ Waiting for CARLA to be ready...")
-    time.sleep(10)
+        print("⏳ Waiting for CARLA to be ready...")
+        time.sleep(10)
 
-    max_wait = 60
-    check_interval = 1
-    elapsed = 0
+        max_wait = 60
+        check_interval = 1
+        elapsed = 0
 
-    while elapsed < max_wait:
-        if is_carla_running():
-            print(f"✅ CARLA ready after {elapsed} seconds")
-            time.sleep(2)
-            return
-        
-        print(f"   [{elapsed}s] Waiting for CARLA server...")
-        time.sleep(check_interval)
-        elapsed += check_interval
+        while elapsed < max_wait:
+            if is_carla_running():
+                print(f"✅ CARLA ready after {elapsed} seconds")
+                time.sleep(2)
+                return
+            
+            print(f"   [{elapsed}s] Waiting for CARLA server...")
+            time.sleep(check_interval)
+            elapsed += check_interval
 
-    raise TimeoutError("CARLA did not respond...")
+        raise TimeoutError("CARLA did not respond...")
+    print("CARLA simulator already running.")
 
 
 

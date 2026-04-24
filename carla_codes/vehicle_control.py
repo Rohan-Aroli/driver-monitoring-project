@@ -47,6 +47,7 @@ def run_control_loop(world,vehicle):
 
             else:
                 
+                #if driver_state := "UNRESPONSIVE":
                 if prev_state != "UNRESPONSIVE":
                     vehicle.set_autopilot(False)
                     set_hazard_lights(vehicle, True)

@@ -2,9 +2,14 @@ import cv2
 
 from face_detection import FaceDetector
 from logger import write_state_periodically
+import uvicorn
+import threading
+import Streaming_frames_endpoint as stream
+import frame_bridge
 
 global prev_x 
 global prev_area 
+global frame_streaming 
 
 POSITION_THRESHOLD = 80
 AREA_THRESHOLD = 5000
@@ -19,7 +24,11 @@ eye_cascade = cv2.CascadeClassifier(
     cv2.data.haarcascades + 'haarcascade_eye.xml'
 )
 
+def start_api():
+    uvicorn.run(stream.app, host="0.0.0.0", port=8000)
+
 def run_face_detection():
+    global frame_streaming
     prev_x = None
     prev_area = None
     print("🔥 FACE DETECTION SCRIPT STARTED")
@@ -29,6 +38,8 @@ def run_face_detection():
         ret, frame = cap.read()
         if not ret:
             break
+        frame_streaming = frame
+        frame_bridge.send_frames(frame_streaming) ########
 
         data = detector.detect(frame)
 
@@ -39,32 +50,7 @@ def run_face_detection():
 
             face_region = frame[y:y+h, x:x+w]
 
-            # # ---- VALIDATION START ----
-            # valid = True
-
-            # # 1. Eye check
-            # gray = cv2.cvtColor(face_region, cv2.COLOR_BGR2GRAY) 
-            # face_region_gray = gray
-
-            # eyes = eye_cascade.detectMultiScale(face_region_gray)
-
-            # # 2. Position consistency
-            # if valid and prev_x is not None:
-            #     if abs(x - prev_x) > POSITION_THRESHOLD:
-            #         valid = False
-
-            # # 3. Size consistency
-            # area = w * h
-            # if valid and prev_area is not None:
-            #     if abs(area - prev_area) > AREA_THRESHOLD:
-            #         valid = False
-
-            # # Update history ONLY if valid
-            # if valid:
-            #     prev_x = x
-            #     prev_area = area
-
-            # final_face = valid
+        #check for validation if team wants to 
 
         else:
             pass
@@ -91,4 +77,7 @@ def run_face_detection():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=start_api, daemon=True).start() 
     run_face_detection()
+
+    
