@@ -4,14 +4,16 @@ from pathlib import Path
 import cv2
 
 from carla_codes.vehicle_functions import set_hazard_lights, honk
+from carla_codes.custom_vehicle_physics import EmergencyPullOver
 import carla_codes.spawn_car_and_camera as cam
 
-# -------------------- PATH --------------------
+
+# ---------------- PATH ----------------
 BASE_DIR = Path(__file__).resolve().parent.parent
 JSON_PATH = BASE_DIR / "shared" / "driver_state.json"
 
 
-# -------------------- READ DRIVER STATE --------------------
+# ---------------- READ DRIVER STATE ----------------
 def read_state():
     try:
         with open(JSON_PATH, "r") as f:
@@ -29,16 +31,17 @@ def read_state():
         return "UNKNOWN"
 
 
-# -------------------- CONTROL LOOP --------------------
+# ---------------- CONTROL LOOP ----------------
 def run_control_loop(world, vehicle, traffic_manager, tm_port):
     prev_state = None
-    slow_start_time = None
+    drowsy_start_time = None
+    last_honk_time = 0
+    emergency_system = EmergencyPullOver(world, vehicle)
 
     try:
         while True:
-            # 🔥 REQUIRED for synchronous mode
-            world.tick()
 
+            # NO world.tick() → async mode handles it
             driver_state = read_state()
 
             # ================= NORMAL =================
@@ -47,50 +50,64 @@ def run_control_loop(world, vehicle, traffic_manager, tm_port):
                     print("🟢 NORMAL → Autopilot ON")
 
                     vehicle.set_autopilot(True, tm_port)
-                    traffic_manager.vehicle_percentage_speed_difference(vehicle, 0)
+                    traffic_manager.vehicle_percentage_speed_difference(
+                        vehicle, 0
+                    )
+
                     set_hazard_lights(vehicle, False)
 
                 prev_state = "NORMAL"
+                drowsy_start_time = None
 
             # ================= DROWSY =================
             elif driver_state == "DROWSY":
+
                 if prev_state != "DROWSY":
-                    print("🟡 DROWSY → Gradual slowdown")
+                    print("🟡 DROWSY → Warning mode")
 
-                    vehicle.set_autopilot(True, tm_port)
                     set_hazard_lights(vehicle, True)
-
-                    slow_start_time = time.time()
-                    prev_state = "DROWSY"
-
-                elapsed = time.time() - slow_start_time
-
-                # Smooth slowdown via Traffic Manager
-                slowdown = min(int(elapsed * 6), 80)
-                traffic_manager.vehicle_percentage_speed_difference(vehicle, slowdown)
-
-                # Controlled honk (not spam)
-                if int(elapsed) % 3 == 0:
-                    print("HONK 🚨")
                     honk()
 
+                    drowsy_start_time = time.time()
+                    prev_state = "DROWSY"
+
+                elapsed = time.time() - drowsy_start_time
+
+                # slight slowdown only
+                traffic_manager.vehicle_percentage_speed_difference(
+                    vehicle, 25
+                )
+
+                # honk every 2 sec
+                if time.time() - last_honk_time >= 2:
+                    honk()
+                    last_honk_time = time.time()
+
+                # escalate automatically
+            #    if elapsed >= 5:
+             #       print("🔴 Drowsy > 5 sec → Escalating to UNRESPONSIVE")
+              #      driver_state = "UNRESPONSIVE"
+
             # ================= UNRESPONSIVE =================
-            elif driver_state == "UNRESPONSIVE":
+            if driver_state == "UNRESPONSIVE":
+
                 if prev_state != "UNRESPONSIVE":
-                    print("🔴 UNRESPONSIVE → Emergency mode")
+                    print("🚨 UNRESPONSIVE → Emergency parking")
 
                     vehicle.set_autopilot(False)
                     set_hazard_lights(vehicle, True)
 
                     for _ in range(3):
                         honk()
+                        time.sleep(0.5)
 
-                    # TODO: integrate Rohan's module here
+                    emergency_system.start()
 
-                prev_state = "UNRESPONSIVE"
+                    if prev_state == "UNRESPONSIVE":
+                        emergency_system.run_step()
 
             # ================= UNKNOWN =================
-            else:
+            elif driver_state == "UNKNOWN":
                 print("⚠️ UNKNOWN driver state")
 
             # ---------------- CAMERA DISPLAY ----------------
@@ -100,6 +117,8 @@ def run_control_loop(world, vehicle, traffic_manager, tm_port):
                     cv2.waitKey(1)
             except Exception as e:
                 print("⚠️ Camera error:", e)
+
+            time.sleep(0.1)
 
     except KeyboardInterrupt:
         print("\n🛑 Control loop stopped")

@@ -7,7 +7,7 @@ from carla_codes.spawn_car_and_camera import setup_carla, start_camera_stream
 from carla_codes.vehicle_control import run_control_loop
 
 
-# -------------------- CHECK CARLA --------------------
+# ---------------- CHECK CARLA ----------------
 def is_carla_running(host="localhost", port=2000):
     try:
         with socket.create_connection((host, port), timeout=2):
@@ -16,7 +16,7 @@ def is_carla_running(host="localhost", port=2000):
         return False
 
 
-# -------------------- START CARLA --------------------
+# ---------------- START CARLA ----------------
 def start_carla_if_needed():
     if not is_carla_running():
         print("🚀 Starting CARLA simulator...")
@@ -34,7 +34,7 @@ def start_carla_if_needed():
     client = carla.Client("localhost", 2000)
     client.set_timeout(5.0)
 
-    for i in range(80):  # 🔥 increased wait time
+    for i in range(80):
         try:
             world = client.get_world()
             if world.get_map() is not None:
@@ -43,25 +43,27 @@ def start_carla_if_needed():
         except:
             pass
 
-        print(f"   loading... {i}")
+        print(f"loading... {i}")
         time.sleep(1)
 
     raise RuntimeError("CARLA not ready")
 
 
-# -------------------- MAIN --------------------
+# ---------------- MAIN ----------------
 def run_carla():
     client = start_carla_if_needed()
 
     world, vehicle, camera = setup_carla(client)
 
-    # Traffic Manager
+    # ---------------- TRAFFIC MANAGER ----------------
     traffic_manager = client.get_trafficmanager()
-    traffic_manager.set_synchronous_mode(True)  # 🔥 FIXED
+
+    # ASYNC MODE
+    traffic_manager.set_synchronous_mode(False)
 
     tm_port = traffic_manager.get_port()
 
-    # Bind vehicle
+    # Normal driving
     vehicle.set_autopilot(True, tm_port)
 
     start_camera_stream(camera)

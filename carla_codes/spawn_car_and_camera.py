@@ -8,18 +8,20 @@ def setup_carla(client):
     world = client.get_world()
     blueprint_library = world.get_blueprint_library()
 
-    # 🔥 SYNCHRONOUS MODE
+    # ---------------- ASYNCHRONOUS MODE ----------------
     settings = world.get_settings()
-    settings.synchronous_mode = True
-    settings.fixed_delta_seconds = 0.05
+    settings.synchronous_mode = False
+    settings.fixed_delta_seconds = None
     world.apply_settings(settings)
 
-    # Spawn vehicle
+    print("✅ CARLA running in asynchronous mode")
+
+    # ---------------- SPAWN VEHICLE ----------------
     vehicle_bp = blueprint_library.filter('vehicle.*')[0]
     spawn_point = world.get_map().get_spawn_points()[0]
     vehicle = world.spawn_actor(vehicle_bp, spawn_point)
 
-    # Camera
+    # ---------------- CAMERA ----------------
     camera_bp = blueprint_library.find('sensor.camera.rgb')
     camera_bp.set_attribute('image_size_x', '640')
     camera_bp.set_attribute('image_size_y', '480')
@@ -29,7 +31,11 @@ def setup_carla(client):
         carla.Rotation(pitch=-10)
     )
 
-    camera = world.spawn_actor(camera_bp, camera_transform, attach_to=vehicle)
+    camera = world.spawn_actor(
+        camera_bp,
+        camera_transform,
+        attach_to=vehicle
+    )
 
     return world, vehicle, camera
 
