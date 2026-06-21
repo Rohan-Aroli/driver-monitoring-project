@@ -1,6 +1,7 @@
 import cv2
 import threading
 import uvicorn
+import time
 
 from face_detection import FaceDetector
 from logger import write_state_periodically
@@ -39,7 +40,7 @@ def start_api():
 
 
 def run_face_detection():
-
+    start_time=0
     print("🔥 FACE DETECTION SCRIPT STARTED")
 
     while True:
@@ -104,13 +105,22 @@ def run_face_detection():
             except Exception as e:
                 print(f"[ERROR] Pipeline failure: {e}")
                 driver_state = "ERROR"
+
+            if driver_state in ["NO_FACE", "NO_EYES", "ERROR"]:
+                if start_time == 0:
+                    start_time = time.time()
+                if time.time() - start_time > 5:
+                    driver_state = "UNRESPONSIVE"
+            else:
+                start_time = 0
             # ------------------------------------------------
 
             # JSON logging
             try:
-                write_state_periodically({
-                    "driver_state": driver_state
-                })
+                if driver_state not in ["NO_FACE", "NO_EYES", "ERROR"]:
+                    write_state_periodically({
+                        "driver_state": driver_state
+                    })
             except Exception as e:
                 print(f"[WARNING] JSON logging failed: {e}")
 
