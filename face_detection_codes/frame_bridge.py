@@ -1,10 +1,25 @@
+from threading import Lock
 
-global latest_frame
+latest_frame = None
+frame_lock = Lock()
 
-def send_frames(frame):
+
+def send_frame(frame):
+    """
+    Store latest frame safely.
+    """
     global latest_frame
-    latest_frame = frame
 
-def recieve_frames():
-    global latest_frame
-    return latest_frame
+    with frame_lock:
+        latest_frame = frame.copy()
+
+
+def receive_frame():
+    """
+    Return latest frame safely.
+    """
+    with frame_lock:
+        if latest_frame is None:
+            return None
+
+        return latest_frame.copy()
