@@ -1,5 +1,6 @@
 import time
 import json
+import os
 from pathlib import Path
 
 
@@ -26,8 +27,32 @@ class BaselineCalibrator:
 
         self.baseline = {}
 
-        self.save_path = Path(
-            "driver_baseline.json"
+        # -------------------------------
+        # Multi-driver support
+        # -------------------------------
+        self.baseline_folder = Path(
+            "baselines"
+        )
+
+        self.baseline_folder.mkdir(
+            exist_ok=True
+        )
+
+        self.save_path = None
+
+    # -----------------------------------
+    # Set active driver
+    # -----------------------------------
+    def set_driver(self, driver_id):
+
+        self.save_path = (
+            self.baseline_folder /
+            f"{driver_id}.json"
+        )
+
+        print(
+            f"[CALIBRATOR] Active Driver: "
+            f"{driver_id}"
         )
 
     # -----------------------------------
@@ -39,6 +64,31 @@ class BaselineCalibrator:
 
         print(
             "[CALIBRATION] Started"
+        )
+
+    # -----------------------------------
+    # Reset calibration buffers
+    # -----------------------------------
+    def reset(self):
+
+        self.start_time = None
+
+        self.ear_values.clear()
+        self.mar_values.clear()
+        self.perclos_values.clear()
+        self.blink_rates.clear()
+        self.closure_values.clear()
+
+        self.pitch_values.clear()
+        self.yaw_values.clear()
+        self.roll_values.clear()
+
+        self.calibrated = False
+
+        self.baseline = {}
+
+        print(
+            "[CALIBRATION] Reset"
         )
 
     # -----------------------------------
@@ -108,42 +158,34 @@ class BaselineCalibrator:
             self.baseline = {
 
                 "ear_mean":
-
                     sum(self.ear_values)
                     / len(self.ear_values),
 
                 "mar_mean":
-
                     sum(self.mar_values)
                     / len(self.mar_values),
 
                 "perclos_mean":
-
                     sum(self.perclos_values)
                     / len(self.perclos_values),
 
                 "blink_rate_mean":
-
                     sum(self.blink_rates)
                     / len(self.blink_rates),
 
                 "closure_mean":
-
                     sum(self.closure_values)
                     / len(self.closure_values),
 
                 "pitch_mean":
-
                     sum(self.pitch_values)
                     / len(self.pitch_values),
 
                 "yaw_mean":
-
                     sum(self.yaw_values)
                     / len(self.yaw_values),
 
                 "roll_mean":
-
                     sum(self.roll_values)
                     / len(self.roll_values)
             }
@@ -165,6 +207,12 @@ class BaselineCalibrator:
 
         try:
 
+            if self.save_path is None:
+
+                raise ValueError(
+                    "Driver not selected"
+                )
+
             with open(
                     self.save_path,
                     "w") as f:
@@ -176,7 +224,8 @@ class BaselineCalibrator:
                 )
 
             print(
-                "[BASELINE SAVED]"
+                f"[BASELINE SAVED] "
+                f"{self.save_path}"
             )
 
         except Exception as e:
@@ -192,6 +241,12 @@ class BaselineCalibrator:
 
         try:
 
+            if self.save_path is None:
+
+                raise ValueError(
+                    "Driver not selected"
+                )
+
             with open(
                     self.save_path,
                     "r") as f:
@@ -201,7 +256,8 @@ class BaselineCalibrator:
             self.calibrated = True
 
             print(
-                "[BASELINE LOADED]"
+                f"[BASELINE LOADED] "
+                f"{self.save_path}"
             )
 
             return True

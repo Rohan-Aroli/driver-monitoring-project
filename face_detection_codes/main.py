@@ -4,7 +4,6 @@ import threading
 import uvicorn
 import sys
 import os
-
 # ---------------- FIX BACKEND IMPORT ----------------
 # Adds project root to Python path
 sys.path.append(
@@ -42,7 +41,10 @@ from head_pose_estimator import (
 from baseline_calibration import (
     BaselineCalibrator
 )
-
+from driver_manager import DriverManager
+from system_mode_manager import (
+    SystemModeManager
+)
 from logger import (
     write_state_periodically,
     write_scores_periodically
@@ -68,15 +70,49 @@ microsleep_detector = MicrosleepDetector()
 
 head_pose_estimator = HeadPoseEstimator()
 
+driver_manager = DriverManager()
+mode_manager = SystemModeManager()
+driver_id = input(
+    "Enter Driver ID: "
+).strip().lower()
+if not driver_id:
+
+    driver_id = "guest"
+
+    print(
+        "[INFO] No driver entered. Using guest profile."
+    )
+
+driver_manager.set_driver(
+    driver_id
+)
+
 calibrator = BaselineCalibrator(
     calibration_time=60
 )
+
+calibrator.set_driver(
+    driver_id
+)
+
 if calibrator.load_baseline():
-    print("[INFO] Existing baseline loaded")
+
+    print(
+        "[INFO] Existing baseline loaded"
+    )
+
+    mode_manager.set_mode(
+        "MONITORING"
+    )
 
 else:
+
     print(
-        "[INFO] No baseline found. Starting calibration."
+        "[INFO] No baseline found."
+    )
+
+    mode_manager.set_mode(
+        "CALIBRATION"
     )
 cap = cv2.VideoCapture(0)
 detector = FaceDetector()
@@ -104,6 +140,9 @@ def start_api():
 def run_face_detection():
     global last_uploaded_state
     print(" DRIVER MONITORING SYSTEM STARTED")
+    print(
+    f"[ACTIVE DRIVER] {driver_id}"
+    )
     
 
     while True:
@@ -256,6 +295,7 @@ def run_face_detection():
                         "eyes_detected": True,
 
                         "mar": mar,
+                        "driver_id": driver_id,
 
                         "is_yawning":
                             yawn_metrics["is_yawning"],
@@ -295,24 +335,57 @@ def run_face_detection():
                     # Calibration
                     # ---------------------------------
 
-                    if not calibrator.calibrated:
+                    # ---------------------------------
+                    # System Mode Handling
+                    # ---------------------------------
+
+                    if mode_manager.is_calibration():
 
                         calibrator.update(metrics)
 
                         driver_state = "CALIBRATING"
 
-                    else:
+                        if calibrator.calibrated:
+
+                            mode_manager.set_mode(
+                                "WAITING"
+                            )
+
+                            while True:
+
+                                choice = input(
+                                    "\nCalibration Complete.\n"
+                                    "Start Monitoring? (y/n): "
+                                ).strip().lower()
+
+                                if choice == "y":
+
+                                    mode_manager.set_mode(
+                                        "MONITORING"
+                                    )
+
+                                    break
+
+                                print(
+                                    "Monitoring not started."
+                                )
+
+                    elif mode_manager.is_monitoring():
 
                         driver_state = classifier.classify(
                             metrics
                         )
 
+                    else:
+
+                        driver_state = "WAITING"
                     write_scores_periodically(metrics)
 
                     # --------------------------------------------
                     # UPLOAD ONLY WHEN DRIVER BECOMES UNRESPONSIVE
                     # --------------------------------------------
                     frame_url = None
+                    metrics["driver_id"] = driver_id
 
                     if (
                         driver_state == "UNRESPONSIVE"
@@ -519,7 +592,7 @@ def run_face_detection():
                 )
 
                 cv2.putText(
-                    frame,
+                    frame,          
                     f"Pitch: {metrics.get('pitch',0):.1f}",
                     (x, y + h + 145),
                     cv2.FONT_HERSHEY_SIMPLEX,
