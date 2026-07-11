@@ -1,3 +1,5 @@
 __pycache__/
 facedetection/
 /face_detection_codes.zip
+/.env
+test files/

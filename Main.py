@@ -1,7 +1,7 @@
 import sys
 import time
-from carla_codes.main import run_carla
-from subprocess_launcher import start_face_detection, stop_face_detection
+# from carla_codes.main import run_carla
+from subprocess_launcher import start_face_detection, stop_face_detection, start_communicator,stop_communicator
 
 
 def main():
@@ -9,12 +9,15 @@ def main():
 
     try:
         start_face_detection()
+        start_communicator()
 
         # 🔥 Keep CARLA running continuously
+        # while True:
+        #     run_carla()
+        #     print("⚠️ CARLA exited unexpectedly. Restarting...")
+        #     time.sleep(2)
         while True:
-            run_carla()
-            print("⚠️ CARLA exited unexpectedly. Restarting...")
-            time.sleep(2)
+            time.sleep(1)
 
     except KeyboardInterrupt:
         print("\n🛑 Ctrl+C detected. Shutting down...")
@@ -24,6 +27,7 @@ def main():
 
     finally:
         stop_face_detection()
+        stop_communicator()
         print("🧹 Cleanup done. Exiting.")
         sys.exit(0)
 
