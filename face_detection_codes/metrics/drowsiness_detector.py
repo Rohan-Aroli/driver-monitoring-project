@@ -1,10 +1,15 @@
 import time
 from collections import deque
-from ear_calculator import EARCalculator
+from .ear_calculator import EARCalculator
 
 
 class DrowsinessDetector:
-    def __init__(self, ear_threshold=0.23, min_blink_duration=0.1):
+    def __init__(
+        self,
+        ear_threshold=0.23,
+        min_blink_duration=0.1,
+        max_blink_duration=0.8,
+    ):
 
         # EAR calculator
         self.ear_calculator = EARCalculator()
@@ -12,6 +17,7 @@ class DrowsinessDetector:
         # Thresholds
         self.ear_threshold = ear_threshold
         self.min_blink_duration = min_blink_duration
+        self.max_blink_duration = max_blink_duration
 
         # Eye state
         self.eye_closed = False
@@ -103,7 +109,11 @@ class DrowsinessDetector:
                 if self.eye_closed and self.eye_close_start:
                     closure_time = current_time - self.eye_close_start
 
-                    if closure_time >= self.min_blink_duration:
+                    if (
+                        self.min_blink_duration
+                        <= closure_time
+                        <= self.max_blink_duration
+                    ):
                         self.blink_timestamps.append(current_time)
                         self.closure_durations.append(closure_time)
 

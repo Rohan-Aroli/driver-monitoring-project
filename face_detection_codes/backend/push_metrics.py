@@ -1,87 +1,113 @@
-from supabase_client import supabase
 import time
 
+from backend.database_writer import DatabaseWriter
+from backend.supabase_client import supabase
+
 last_push_time = 0
+last_metric_write_time = 0
 last_payload = {}
+last_event_state = None
+database_writer = DatabaseWriter(supabase)
+status_callback = None
+EVENT_STATES = {"DROWSY", "UNRESPONSIVE", "MICROSLEEP", "DISTRACTION"}
+
+
+def set_status_callback(callback):
+    global status_callback
+    status_callback = callback
+
+
+def report_status(message, success):
+    if status_callback is not None:
+        status_callback(message, success)
+
+
+def _snapshot_payload(metrics, driver_state, frame_url=None):
+    payload = {
+        "ear": metrics.get("ear"),
+        "perclos": metrics.get("perclos"),
+        "blink_rate": metrics.get("blink_rate"),
+        "driver_state": driver_state,
+        "fatigue_score": metrics.get("drowsiness_score"),
+        "eye_closure_duration": metrics.get("avg_closure_duration"),
+    }
+    if frame_url is not None:
+        payload["frame_url"] = frame_url
+    return payload
 
 
 def push_driver_metrics(
-        metrics,
-        driver_state,
-        frame_url=None):
-
+    metrics,
+    driver_state,
+    frame_url=None,
+    driver_id=None,
+    trip_id=None,
+):
     global last_push_time
+    global last_metric_write_time
     global last_payload
+    global last_event_state
 
     current_time = time.time()
-
-    # Update only once every second
-    if current_time - last_push_time < 1:
+    if not driver_id:
         return
 
     try:
-        payload = {
-            "ear": float(
-                metrics.get("ear", 0)
-            ),
+        payload = _snapshot_payload(metrics, driver_state, frame_url)
 
-            "perclos": float(
-                metrics.get("perclos", 0)
-            ),
-
-            "blink_rate": int(
-                metrics.get("blink_rate", 0)
-            ),
-
-            "driver_state": str(
-                driver_state
-            ),
-
-            "fatigue_score": float(
-                metrics.get(
-                    "drowsiness_score",
-                    0
-                )
-            ),
-
-            "eye_closure_duration": float(
-                metrics.get(
-                    "avg_closure_duration",
-                    0
-                )
-            ),
-
-            "updated_at": int(current_time)
-        }
-
-        if frame_url:
-            payload["frame_url"] = frame_url
-
-        # Skip duplicate updates
-        compare_payload = payload.copy()
-        compare_payload.pop("updated_at", None)
-
-        if compare_payload == last_payload:
+        if (
+            last_payload
+            and payload == last_payload
+            and current_time - last_push_time < 1.0
+        ):
             return
 
-        last_payload = compare_payload
-
-        response = (
-            supabase
-            .table("live_driver_state")
-            .update(payload)
-            .eq("id", 1)
-            .execute()
+        database_writer.update_live_driver_state(
+            metrics,
+            driver_id,
+            driver_state,
+            frame_url=frame_url,
         )
 
-        print(
-            "[SUPABASE LIVE ROW UPDATED]"
-        )
+        if trip_id and current_time - last_metric_write_time >= 1.0:
+            database_writer.write_driver_metrics(
+                metrics,
+                driver_id,
+                trip_id,
+                driver_state,
+            )
+            last_metric_write_time = current_time
 
-        last_payload = compare_payload.copy()
+        if driver_state in EVENT_STATES and driver_state != last_event_state:
+            event_metadata = {
+                "ear": metrics.get("ear"),
+                "perclos": metrics.get("perclos"),
+                "blink_rate": metrics.get("blink_rate"),
+                "fatigue_score": metrics.get("drowsiness_score"),
+                "eye_closure_duration": metrics.get("avg_closure_duration"),
+            }
+            if frame_url:
+                event_metadata["frame_url"] = frame_url
+
+            database_writer.write_event(
+                event_type=driver_state,
+                driver_id=driver_id,
+                trip_id=trip_id,
+                severity=(
+                    "critical" if driver_state == "UNRESPONSIVE" else "warning"
+                ),
+                metadata=event_metadata,
+            )
+            last_event_state = driver_state
+            print(f"[EVENT] {driver_state} recorded for {driver_id}")
+        elif driver_state not in EVENT_STATES:
+            last_event_state = None
+
+        last_payload = payload.copy()
         last_push_time = current_time
+        report_status("Live state updated", True)
+        print("[SUPABASE LIVE ROW UPDATED]")
 
     except Exception as e:
-        print(
-            f"[SUPABASE ERROR]: {e}"
-        )
+        report_status(f"Supabase write failed: {e}", False)
+        print(f"[SUPABASE ERROR]: {e}")

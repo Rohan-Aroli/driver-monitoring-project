@@ -2,3 +2,7 @@ __pycache__/
 facedetection/
 /face_detection_codes.zip
 .env
+opencode.json
+.venv
+.venv312
+baselines

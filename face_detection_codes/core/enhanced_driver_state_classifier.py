@@ -3,13 +3,53 @@ import time
 
 class EnhancedDriverStateClassifier:
 
-    def __init__(self):
+    def __init__(self, profile=None, missing_timeout=4, recovery_time=2):
 
         self.state = "NORMAL"
+        self.profile = profile or {}
 
-        # Face missing handling
         self.missing_start_time = None
-        self.missing_timeout = 4
+        self.missing_timeout = missing_timeout
+        self.healthy_start_time = None
+        self.recovery_time = recovery_time
+
+    def update_profile(self, profile):
+        self.profile = profile or {}
+
+    @staticmethod
+    def _number(value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _thresholds(self):
+        ear_mean = self._number(self.profile.get("ear_mean"), 0.30)
+        perclos_mean = self._number(self.profile.get("perclos_mean"), 0.10)
+        perclos_std = self._number(self.profile.get("perclos_std"), 0.0)
+        blink_mean = self._number(self.profile.get("blink_rate_mean"), 15.0)
+        closure_mean = self._number(
+            self.profile.get(
+                "eye_closure_duration_mean",
+                self.profile.get("closure_mean"),
+            ),
+            0.0,
+        )
+
+        return {
+            "ear_closed": max(0.16, min(0.30, ear_mean * 0.82)),
+            "perclos_drowsy": max(0.25, perclos_mean + (2.0 * perclos_std)),
+            "blink_low": max(1.0, blink_mean * 0.5),
+            "closure_drowsy": max(1.5, closure_mean + 1.0),
+        }
+
+    def _angle_deviation(self, value, key):
+        baseline = self._number(self.profile.get(key), 0.0)
+        difference = (value - baseline + 180.0) % 360.0 - 180.0
+        return abs(difference)
+
+    def get_ear_threshold(self):
+        return self._thresholds()["ear_closed"]
 
     # ---------------------------------------------------
     # MAIN CLASSIFIER
@@ -32,12 +72,12 @@ class EnhancedDriverStateClassifier:
                 "eyes_detected", True
             )
 
-            perclos = features.get(
-                "perclos", 0
-            )
+            perclos = self._number(features.get("perclos"))
 
-            fatigue_score = features.get(
-                "drowsiness_score", 0
+            ear = self._number(features.get("ear"))
+
+            fatigue_score = self._number(
+                features.get("drowsiness_score")
             )
 
             yawn_count = features.get(
@@ -48,25 +88,28 @@ class EnhancedDriverStateClassifier:
                 "is_yawning", False
             )
 
-            closure_duration = features.get(
-                "continuous_eye_closure", 0
+            closure_duration = self._number(
+                features.get("continuous_eye_closure")
             )
 
             microsleep = features.get(
                 "microsleep_detected", False
             )
 
-            pitch = abs(
-                features.get("pitch", 0)
+            pitch = self._angle_deviation(
+                self._number(features.get("pitch")),
+                "pitch_mean",
+            )
+            yaw = self._angle_deviation(
+                self._number(features.get("yaw")),
+                "yaw_mean",
+            )
+            roll = self._angle_deviation(
+                self._number(features.get("roll")),
+                "roll_mean",
             )
 
-            yaw = abs(
-                features.get("yaw", 0)
-            )
-
-            roll = abs(
-                features.get("roll", 0)
-            )
+            thresholds = self._thresholds()
 
             # ---------------------------------------
             # NO FACE / NO EYES
@@ -85,6 +128,7 @@ class EnhancedDriverStateClassifier:
                 if missing_duration >= self.missing_timeout:
 
                     self.state = "UNRESPONSIVE"
+                    self.healthy_start_time = None
 
                 return self.state
 
@@ -98,12 +142,14 @@ class EnhancedDriverStateClassifier:
             if closure_duration >= 4:
 
                 self.state = "UNRESPONSIVE"
+                self.healthy_start_time = None
 
                 return self.state
 
             if microsleep and closure_duration >= 3:
 
                 self.state = "UNRESPONSIVE"
+                self.healthy_start_time = None
 
                 return self.state
 
@@ -113,11 +159,14 @@ class EnhancedDriverStateClassifier:
 
             score = 0
 
-            # PERCLOS contribution
-            if perclos > 0.40:
+            if ear > 0 and ear <= thresholds["ear_closed"]:
                 score += 2
 
-            elif perclos > 0.25:
+            # PERCLOS contribution
+            if perclos >= thresholds["perclos_drowsy"] + 0.15:
+                score += 2
+
+            elif perclos >= thresholds["perclos_drowsy"]:
                 score += 1
 
             # Existing fatigue score
@@ -132,10 +181,10 @@ class EnhancedDriverStateClassifier:
                 score += 3
 
             # Closure duration
-            if closure_duration > 2:
+            if closure_duration >= thresholds["closure_drowsy"] + 0.5:
                 score += 2
 
-            elif closure_duration > 1:
+            elif closure_duration >= thresholds["closure_drowsy"]:
                 score += 1
 
             # Head nodding
@@ -167,16 +216,16 @@ class EnhancedDriverStateClassifier:
             if score >= 6:
 
                 self.state = "DROWSY"
+                self.healthy_start_time = None
 
-            elif score <= 2:
-
-                self.state = "NORMAL"
-
-            # Hysteresis
-            if self.state == "DROWSY":
-
-                if score <= 2:
+            elif self.state in {"DROWSY", "UNRESPONSIVE"}:
+                if self.healthy_start_time is None:
+                    self.healthy_start_time = current_time
+                elif current_time - self.healthy_start_time >= self.recovery_time:
                     self.state = "NORMAL"
+                    self.healthy_start_time = None
+            else:
+                self.state = "NORMAL"
 
             return self.state
 

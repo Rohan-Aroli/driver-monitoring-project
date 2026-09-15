@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 import cv2
 import time
 
-import frame_bridge
+from core import frame_bridge
 from fastapi.middleware.cors import CORSMiddleware
 
 

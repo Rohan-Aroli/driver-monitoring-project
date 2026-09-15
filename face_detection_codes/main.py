@@ -1,64 +1,48 @@
 
 import cv2
-import threading
-import uvicorn
-import sys
+import json
 import os
-# ---------------- FIX BACKEND IMPORT ----------------
-# Adds project root to Python path
-sys.path.append(
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..")
-    )
-)
+import threading
+from datetime import datetime
+from uuid import uuid4
 
-from frame_uploader import upload_driver_frame
+import uvicorn
 
-# ----------------------------------------------------
-from face_detection import FaceDetector
-from eye_landmark_extractor import EyeLandmarkExtractor
-from drowsiness_detector import DrowsinessDetector
-from enhanced_driver_state_classifier import (
+from backend.frame_uploader import upload_driver_frame
+from backend.database_writer import DatabaseWriter
+from backend.push_metrics import push_driver_metrics
+from backend.supabase_client import supabase
+from backend import Streaming_frames_endpoint as stream
+
+from detection.face_detection import FaceDetector
+from detection.eye_landmark_extractor import EyeLandmarkExtractor
+from detection.mouth_landmark_extractor import MouthLandmarkExtractor
+from detection.head_pose_estimator import HeadPoseEstimator
+
+from metrics.drowsiness_detector import DrowsinessDetector
+from metrics.mar_calculator import MARCalculator
+from metrics.yawn_detector import YawnDetector
+from metrics.microsleep_detector import MicrosleepDetector
+from metrics.baseline_calibration import BaselineCalibrator
+
+from core import frame_bridge
+from core.driver_manager import DriverManager
+from core.enhanced_driver_state_classifier import (
     EnhancedDriverStateClassifier
 )
-
-from mouth_landmark_extractor import (
-    MouthLandmarkExtractor
-)
-
-from mar_calculator import MARCalculator
-
-from yawn_detector import YawnDetector
-
-from microsleep_detector import (
-    MicrosleepDetector
-)
-
-from head_pose_estimator import (
-    HeadPoseEstimator
-)
-
-from baseline_calibration import (
-    BaselineCalibrator
-)
-from driver_manager import DriverManager
-from system_mode_manager import (
-    SystemModeManager
-)
-from logger import (
+from core.system_mode_manager import SystemModeManager
+from core.logger import (
     write_state_periodically,
     write_scores_periodically
 )
 
-from push_metrics import push_driver_metrics
-
-import Streaming_frames_endpoint as stream
-import frame_bridge
+from DriverScore.db_repository import ScoreRepository
+from DriverScore.models import TripContext
+from DriverScore.scoring_pipeline import ScoringPipeline
 
 
 # ---------------- INITIALIZE MODULES ----------------
 drowsy_detector = DrowsinessDetector()
-classifier = EnhancedDriverStateClassifier()
 
 mouth_extractor = MouthLandmarkExtractor()
 
@@ -72,16 +56,80 @@ head_pose_estimator = HeadPoseEstimator()
 
 driver_manager = DriverManager()
 mode_manager = SystemModeManager()
-driver_id = input(
-    "Enter Driver ID: "
-).strip().lower()
-if not driver_id:
+database_writer = DatabaseWriter(supabase)
+dashboard_callback = None
+stop_requested = threading.Event()
 
-    driver_id = "guest"
 
-    print(
-        "[INFO] No driver entered. Using guest profile."
+def set_dashboard_callback(callback):
+    global dashboard_callback
+    dashboard_callback = callback
+
+
+def dashboard_update(frame, metrics, driver_state):
+    if dashboard_callback is not None:
+        dashboard_callback(frame, metrics, driver_state)
+
+
+def request_stop():
+    stop_requested.set()
+
+
+def prompt_optional(label):
+    if os.getenv("DASHBOARD_MODE") == "1":
+        return None
+    value = input(f"{label} (optional): ").strip()
+    return value or None
+
+
+def register_new_driver(identifier):
+    print("\nNew driver registration")
+    profile_json = os.getenv("DRIVER_PROFILE_JSON")
+    profile_values = json.loads(profile_json) if profile_json else {}
+    name = profile_values.get("name")
+    if not name and os.getenv("DASHBOARD_MODE") != "1":
+        name = input("Name: ").strip()
+    if not name:
+        raise ValueError("Driver name is required.")
+
+    age_text = profile_values.get("age") or prompt_optional("Age")
+    age = int(age_text) if age_text else None
+
+    profile = {
+        "name": name,
+        "age": age,
+        "employee_id": identifier,
+        "license": profile_values.get("license") or prompt_optional("License number"),
+        "contact": profile_values.get("contact") or prompt_optional("Contact"),
+        "vehicle": profile_values.get("vehicle") or prompt_optional("Vehicle"),
+        "plate": profile_values.get("plate") or prompt_optional("Plate number"),
+        "route": profile_values.get("route") or prompt_optional("Route"),
+        "origin": profile_values.get("origin") or prompt_optional("Origin"),
+        "destination": profile_values.get("destination") or prompt_optional("Destination"),
+        "shift_start": profile_values.get("shift_start") or prompt_optional("Shift start"),
+        "notes": profile_values.get("notes") or prompt_optional("Notes"),
+        "fleet_id": None,
+    }
+
+    driver = database_writer.register_driver(
+        str(uuid4()),
+        profile,
     )
+    print(f"[INFO] Driver registered: {driver['name']}")
+    return driver
+
+
+entered_driver_id = os.getenv("DRIVER_ID")
+if not entered_driver_id:
+    entered_driver_id = input(
+        "Enter employee ID or driver UUID: "
+    ).strip().lower()
+driver_profile = database_writer.find_driver(entered_driver_id)
+
+if not driver_profile:
+    driver_profile = register_new_driver(entered_driver_id)
+
+driver_id = driver_profile["id"]
 
 driver_manager.set_driver(
     driver_id
@@ -114,10 +162,25 @@ else:
     mode_manager.set_mode(
         "CALIBRATION"
     )
+
+classifier = EnhancedDriverStateClassifier(
+    profile=calibrator.get_baseline()
+)
+drowsy_detector.ear_threshold = classifier.get_ear_threshold()
 cap = cv2.VideoCapture(0)
 detector = FaceDetector()
 extractor = EyeLandmarkExtractor()
 last_uploaded_state = None
+trip_start_time = datetime.utcnow()
+trip = database_writer.start_trip(
+    driver_id,
+    trip_start_time,
+    driver_profile,
+)
+current_trip_id = trip["trip_id"]
+
+score_repository = ScoreRepository(supabase)
+scoring_pipeline = ScoringPipeline(score_repository)
 
 
 # ---------------- START FASTAPI SERVER ----------------
@@ -136,6 +199,36 @@ def start_api():
         print(f"[ERROR] API Server failed to start: {e}")
 
 
+def finalize_trip_score():
+    """Compute and persist DriverScore for the current trip."""
+    try:
+        trip_end_time = datetime.utcnow()
+
+        database_writer.end_trip(
+            current_trip_id,
+            trip_end_time,
+        )
+
+        trip_context = TripContext(
+            trip_id=current_trip_id,
+            driver_id=driver_id,
+            trip_start=trip_start_time,
+            trip_end=trip_end_time
+        )
+
+        score = scoring_pipeline.process_trip(trip_context)
+
+        print(
+            "[DRIVER SCORE] "
+            f"raw={score.raw_driver_score} "
+            f"final={score.final_driver_score} "
+            f"confidence={score.score_confidence}"
+        )
+
+    except Exception as e:
+        print(f"[DRIVER SCORE ERROR] {e}")
+
+
 # ---------------- MAIN PIPELINE ----------------
 def run_face_detection():
     global last_uploaded_state
@@ -145,7 +238,7 @@ def run_face_detection():
     )
     
 
-    while True:
+    while not stop_requested.is_set():
         try:
             ret, frame = cap.read()
 
@@ -157,6 +250,7 @@ def run_face_detection():
             # CREATE CLEAN FRAME COPY FOR DASHBOARD STREAM
             # --------------------------------------------
             raw_frame = frame.copy()
+            frame_url = None
 
             # --------------------------------------------
             # SEND FRAME TO LOCAL FASTAPI STREAM
@@ -347,28 +441,18 @@ def run_face_detection():
 
                         if calibrator.calibrated:
 
+                            classifier.update_profile(
+                                calibrator.get_baseline()
+                            )
+                            drowsy_detector.ear_threshold = (
+                                classifier.get_ear_threshold()
+                            )
+
                             mode_manager.set_mode(
                                 "WAITING"
                             )
 
-                            while True:
-
-                                choice = input(
-                                    "\nCalibration Complete.\n"
-                                    "Start Monitoring? (y/n): "
-                                ).strip().lower()
-
-                                if choice == "y":
-
-                                    mode_manager.set_mode(
-                                        "MONITORING"
-                                    )
-
-                                    break
-
-                                print(
-                                    "Monitoring not started."
-                                )
+                            mode_manager.set_mode("MONITORING")
 
                     elif mode_manager.is_monitoring():
 
@@ -384,14 +468,16 @@ def run_face_detection():
                     # --------------------------------------------
                     # UPLOAD ONLY WHEN DRIVER BECOMES UNRESPONSIVE
                     # --------------------------------------------
-                    frame_url = None
                     metrics["driver_id"] = driver_id
 
                     if (
                         driver_state == "UNRESPONSIVE"
                         and last_uploaded_state != "UNRESPONSIVE"
                     ):
-                        frame_url = upload_driver_frame(raw_frame)
+                        frame_url = upload_driver_frame(
+                            raw_frame,
+                            driver_id,
+                        )
 
                         print(
                             "[INCIDENT SNAPSHOT SAVED]"
@@ -407,7 +493,9 @@ def run_face_detection():
                     push_driver_metrics(
                         metrics,
                         driver_state,
-                        frame_url
+                        frame_url,
+                        driver_id=driver_id,
+                        trip_id=current_trip_id
                     )
 
                 elif face_detected:
@@ -453,7 +541,9 @@ def run_face_detection():
                     push_driver_metrics(
                         metrics,
                         driver_state,
-                        frame_url
+                        frame_url,
+                        driver_id=driver_id,
+                        trip_id=current_trip_id
                     )
 
                 else:
@@ -499,7 +589,9 @@ def run_face_detection():
                     push_driver_metrics(
                         metrics,
                         driver_state,
-                        frame_url
+                        frame_url,
+                        driver_id=driver_id,
+                        trip_id=current_trip_id
                     )
 
             except Exception as e:
@@ -519,9 +611,14 @@ def run_face_detection():
 
             print(f"[STATE] {driver_state}")
 
+            dashboard_update(frame, metrics, driver_state)
+
             # --------------------------------------------
             # LOCAL DEBUG WINDOW
             # --------------------------------------------
+            if os.getenv("DASHBOARD_MODE") == "1":
+                continue
+
             if face_detected:
 
                 cv2.rectangle(
@@ -651,6 +748,7 @@ def run_face_detection():
 
     cap.release()
     cv2.destroyAllWindows()
+    finalize_trip_score()
 
 
 # ---------------- ENTRY POINT ----------------
@@ -665,6 +763,7 @@ if __name__ == "__main__":
 
     except KeyboardInterrupt:
         print("[INFO] System stopped manually")
+        finalize_trip_score()
 
     except Exception as e:
         print(f"[CRITICAL ERROR] System startup failed: {e}")

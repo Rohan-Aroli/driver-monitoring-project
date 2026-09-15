@@ -10,3 +10,6 @@ tempCodeRunnerFile.py
 
 #json in shared folder
 shared/driver_state.json
+
+# Generated archive exceeds GitHub's file-size limit
+face_detection_codes.zip
