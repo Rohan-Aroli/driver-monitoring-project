@@ -7,7 +7,6 @@ from core import frame_bridge
 from fastapi.middleware.cors import CORSMiddleware
 
 
-
 app = FastAPI()
 
 app.add_middleware(
@@ -17,24 +16,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-STREAM_FPS = 15
+STREAM_FPS = 30
 FRAME_DELAY = 1 / STREAM_FPS
+JPEG_QUALITY = 85
+
+
 def generate_frames():
 
     while True:
 
         try:
-            latest_frame = (
-                frame_bridge.receive_frame()
-            )
+            latest_frame = frame_bridge.receive_frame()
 
             if latest_frame is None:
-                time.sleep(0.1)
+                time.sleep(0.02)
                 continue
 
             ret, buffer = cv2.imencode(
                 ".jpg",
-                latest_frame
+                latest_frame,
+                [cv2.IMWRITE_JPEG_QUALITY, JPEG_QUALITY],
             )
 
             if not ret:
@@ -44,7 +45,8 @@ def generate_frames():
 
             yield (
                 b'--frame\r\n'
-                b'Content-Type: image/jpeg\r\n\r\n'
+                b'Content-Type: image/jpeg\r\n'
+                b'Cache-Control: no-cache\r\n\r\n'
                 + frame_bytes +
                 b'\r\n'
             )
