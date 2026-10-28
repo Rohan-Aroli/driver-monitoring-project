@@ -30,6 +30,7 @@ from metrics.microsleep_detector import MicrosleepDetector
 from metrics.baseline_calibration import BaselineCalibrator
 
 from core import frame_bridge
+from core.camera_capture import CameraCapture
 from core.driver_manager import DriverManager
 from core.enhanced_driver_state_classifier import (
     EnhancedDriverStateClassifier
@@ -191,6 +192,7 @@ print(
     f"{int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x"
     f"{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}"
 )
+camera_capture = CameraCapture(cap, frame_bridge.send_stream_frame)
 detector = FaceDetector()
 extractor = EyeLandmarkExtractor()
 last_uploaded_state = None
@@ -338,18 +340,20 @@ def run_face_detection():
 
     frame_count = 0
     last_frame_warning = 0.0
+    last_frame_id = 0
+    camera_capture.start()
 
     while not stop_requested.is_set():
         try:
-            ret, frame = cap.read()
-
-            if not ret or frame is None:
+            frame, frame_id = camera_capture.get_latest(last_frame_id)
+            if frame is None:
                 now = time.monotonic()
                 if now - last_frame_warning >= 1.0:
-                    print("[ERROR] Camera frame not received")
+                    print("[ERROR] Camera frame not available")
                     last_frame_warning = now
                 continue
 
+            last_frame_id = frame_id
             raw_frame = frame.copy()
             frame_url = None
             frame_count += 1
@@ -834,6 +838,7 @@ def run_face_detection():
             print(f"[CRITICAL ERROR] Main loop failure: {e}")
             continue
 
+    camera_capture.stop()
     cap.release()
     cv2.destroyAllWindows()
     result = finalize_trip_score()

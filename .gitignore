@@ -4,7 +4,8 @@ __pycache__/
 # Virtual environments
 .venv/
 
-
+.env
+face_detection_codes/.env
 # Temp file
 tempCodeRunnerFile.py
 
@@ -13,3 +14,8 @@ shared/driver_state.json
 
 # Generated archive exceeds GitHub's file-size limit
 face_detection_codes.zip
+
+arduino.zip
+
+arduino/
+arduino codes config/

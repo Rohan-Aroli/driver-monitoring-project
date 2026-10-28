@@ -26,7 +26,7 @@ def generate_frames():
     while True:
 
         try:
-            latest_frame = frame_bridge.receive_frame()
+            latest_frame = frame_bridge.receive_stream_frame()
 
             if latest_frame is None:
                 time.sleep(0.02)
@@ -75,9 +75,7 @@ def home():
 @app.get("/health")
 def health():
 
-    latest = (
-        frame_bridge.receive_frame()
-    )
+    latest = frame_bridge.receive_stream_frame()
 
     return {
         "backend_status": "healthy",
